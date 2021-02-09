@@ -1,0 +1,19 @@
+version: '3.9'
+
+services:
+  filebeat:
+    image: elastic/filebeat:7.10.1
+    privileged: true
+    user: root
+    #    logging:
+    #      driver: json-file
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./logs:/logs
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml
+    networks:
+      - docker-elk_elk
+
+networks:
+  docker-elk_elk:
+    external: true

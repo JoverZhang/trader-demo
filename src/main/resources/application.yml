@@ -1,0 +1,13 @@
+spring:
+  application:
+    name: sometry
+  redis:
+    host: 52.83.166.24
+    password: jlw999000
+    port: 6379
+  coordinate:
+    zookeeper:
+      zkServers: localhost:2181
+lock4j:
+  acquire-timeout: 3
+  primary-executor: com.baomidou.lock.executor.ZookeeperLockExecutor
