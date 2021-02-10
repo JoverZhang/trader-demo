@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * 限价买单服务
@@ -32,9 +31,10 @@ public class LimitBuyService {
 
         // 撮合 限价卖单
         matchedOrders.addAll(limitSellOrderPool.match(order));
+        // 匹配有效则更新 外单 余额
         if (!matchedOrders.isEmpty()) {
-            Optional<BigDecimal> matchedAmount = matchedOrders.stream().map(Order::getAmount).reduce(BigDecimal::add);
-            order.setAmount(order.getAmount().subtract(matchedAmount.get()));
+            BigDecimal sumAmount = matchedOrders.stream().map(Order::getAmount).reduce(BigDecimal::add).get();
+            order.setAmount(order.getAmount().subtract(sumAmount));
             // 当 买单 余额为 0 则直接返回
             if (order.getAmount().compareTo(BigDecimal.ZERO) == 0) {
                 return matchedOrders;

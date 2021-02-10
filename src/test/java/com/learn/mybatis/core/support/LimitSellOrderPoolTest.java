@@ -68,6 +68,7 @@ class LimitSellOrderPoolTest extends Assertions {
             toBeMatchedOrderMap.forEach((order, set) -> {
                 List<Order> mirrorMatched = mirror.match(order, orderPool.isAscending());
                 List<Order> orderPoolMatched = orderPool.match(order);
+
                 assertEquals(mirrorMatched, orderPoolMatched);
                 assertEquals(set, orderPoolMatched);
             });
