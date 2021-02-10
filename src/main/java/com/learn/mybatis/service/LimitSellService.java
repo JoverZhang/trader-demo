@@ -7,10 +7,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
 
 /**
+ * 限价买单服务
+ * <p>
+ * 撮合顺序: 限价买单 -> 市价买单 <br/>
+ * 最终放置: 限价卖单池
+ *
  * @author Jover Zhang
  */
 @Service
@@ -21,11 +26,25 @@ public class LimitSellService {
 
     final LimitBuyOrderPool limitBuyOrderPool;
 
-    public void entry(Order order) {
-        List<Order> matched = limitBuyOrderPool.match(order);
+    public List<Order> entry(Order order) {
+        List<Order> matchedOrders = new LinkedList<>();
 
-        Optional<BigDecimal> matchedAmount = matched.stream().map(Order::getAmount).reduce(BigDecimal::add);
-        System.out.println("matchedAmount = " + matchedAmount);
+        // 撮合 限价买单
+        matchedOrders.addAll(limitBuyOrderPool.match(order));
+        // 匹配有效则更新 外单 余额
+        if (!matchedOrders.isEmpty()) {
+            BigDecimal sumAmount = matchedOrders.stream().map(Order::getAmount).reduce(BigDecimal::add).get();
+            order.setAmount(order.getAmount().subtract(sumAmount));
+            // 当 买单 余额为 0 则直接返回
+            if (order.getAmount().compareTo(BigDecimal.ZERO) == 0) {
+                return matchedOrders;
+            }
+        }
+
+        // 将 卖单 放入 限价卖单池
+        limitSellOrderPool.addOrder(order);
+
+        return matchedOrders;
     }
 
 }
