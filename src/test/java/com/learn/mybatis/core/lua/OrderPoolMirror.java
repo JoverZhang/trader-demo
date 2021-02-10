@@ -1,6 +1,7 @@
 package com.learn.mybatis.core.lua;
 
 import com.learn.mybatis.domain.Order;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
@@ -16,6 +17,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 @NoArgsConstructor
 public class OrderPoolMirror {
 
+    @Getter
     ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> orderPool = new ConcurrentSkipListMap<>();
 
     public OrderPoolMirror(List<Order> orders) {
@@ -23,6 +25,9 @@ public class OrderPoolMirror {
     }
 
     public synchronized void addOrder(Order order) {
+        if (order.getAmount().compareTo(BigDecimal.ZERO) == 0) {
+            return;
+        }
         orderPool.compute(order.getPrice(), (k, v) -> {
             if (v == null) {
                 v = new LinkedList<>();
