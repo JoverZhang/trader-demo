@@ -20,12 +20,12 @@ class LimitBuyOrderPoolTest extends Assertions {
 
     @Test
     void match() {
-        ArrayList<Order> orders = new ArrayList<Order>() {{
+        List<Order> orders = new ArrayList<Order>() {{
             for (int i = 1; i <= 10; i++) {
                 add(new Order("b" + i, String.valueOf(i), "10"));
             }
         }};
-        LinkedHashMap<Order, List<Order>> toBeMatchedOrderMap = new LinkedHashMap<Order, List<Order>>() {{
+        Map<Order, List<Order>> toBeMatchedOrderMap = new LinkedHashMap<Order, List<Order>>() {{
             // 外单价格过高
             put(new Order("s1", "10.5", "10000"), Collections.emptyList());
             // 完整匹配
@@ -64,6 +64,7 @@ class LimitBuyOrderPoolTest extends Assertions {
         {
             orders.forEach(orderPool::addOrder);
             OrderPoolMirror mirror = new OrderPoolMirror(orders);
+
             toBeMatchedOrderMap.forEach((order, set) -> {
                 List<Order> mirrorMatched = mirror.match(order, orderPool.isAscending());
                 List<Order> orderPoolMatched = orderPool.match(order);

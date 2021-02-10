@@ -20,7 +20,7 @@ class LimitSellOrderPoolTest extends Assertions {
 
     @Test
     void match() {
-        ArrayList<Order> orders = new ArrayList<Order>() {{
+        List<Order> orders = new ArrayList<Order>() {{
             for (int i = 1; i <= 10; i++) {
                 add(new Order("s" + i, String.valueOf(i), "10"));
             }
@@ -64,6 +64,7 @@ class LimitSellOrderPoolTest extends Assertions {
         {
             orders.forEach(orderPool::addOrder);
             OrderPoolMirror mirror = new OrderPoolMirror(orders);
+
             toBeMatchedOrderMap.forEach((order, set) -> {
                 List<Order> mirrorMatched = mirror.match(order, orderPool.isAscending());
                 List<Order> orderPoolMatched = orderPool.match(order);
