@@ -1,19 +1,15 @@
-version: '3.9'
+version: '3.8'
 
 services:
-  filebeat:
-    image: elastic/filebeat:7.10.1
-    privileged: true
-    user: root
-    #    logging:
-    #      driver: json-file
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./logs:/logs
-      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml
-    networks:
-      - docker-elk_elk
+  redis:
+    image: ttmo/redis-decimal:interim-0.0.2
+    container_name: redis
+    ports:
+      - 6379:6379
+    entrypoint: /usr/local/bin/redis-server --loadmodule /usr/lib/redis/modules/libdecimal.so
 
-networks:
-  docker-elk_elk:
-    external: true
+  zookeeper:
+    image: zookeeper
+    container_name: zookeeper
+    ports:
+      - 2181:2181
