@@ -17,13 +17,16 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 public class Order {
 
+    @Nonnull
     String id;
 
+    @Nonnull
     BigDecimal price;
 
+    @Nonnull
     BigDecimal amount;
 
-    public Order(String id, String price, String amount) {
+    public Order(@Nonnull String id, @Nonnull String price, @Nonnull String amount) {
         this.id = id;
         this.price = new BigDecimal(price);
         this.amount = new BigDecimal(amount);

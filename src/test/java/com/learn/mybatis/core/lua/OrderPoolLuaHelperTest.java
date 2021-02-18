@@ -7,10 +7,12 @@ import lombok.Builder;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.math.BigDecimal;
 import java.util.LinkedList;
@@ -20,6 +22,8 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 
+import static com.learn.mybatis.core.lua.OrderPoolLuaHelper.getOrderQueueNamePrefix;
+
 @SpringBootTest(classes = MainTest.class)
 class OrderPoolLuaHelperTest extends Assertions {
 
@@ -28,10 +32,17 @@ class OrderPoolLuaHelperTest extends Assertions {
     final String namespace = "TEST";
 
     @Autowired
+    StringRedisTemplate redisTemplate;
+
     OrderPoolLuaHelper helper;
 
+    @BeforeEach
+    void beforeEach() {
+        helper = new OrderPoolLuaHelper(namespace, true, redisTemplate);
+    }
+
     @Test
-    void addOrder() {
+    void add() {
         List<Order> orders = OrderRandomizer.builder()
                 .numberOfPrice(10)
                 .numberOfSamePrice(10)
@@ -40,22 +51,21 @@ class OrderPoolLuaHelperTest extends Assertions {
                 .build().get();
         // Mirror
         {
-            OrderPoolMirror mirror = new OrderPoolMirror();
+            OrderPoolMirror mirror = new OrderPoolMirror(helper.isAscending());
             for (Order order : orders) {
-                helper.addOrder(namespace, order.getId(),
-                        order.getPrice().toPlainString(), order.getAmount().toPlainString());
-                mirror.addOrder(order);
-                assertEquals(mirror.toString(), helper.fetchOrderPool(namespace).toString());
+                helper.add(order);
+                mirror.add(order);
+                assertEquals(mirror.toString(), helper.fetchOrderPool().toString());
             }
 
-            Set<String> keys = helper.getRedisTemplate().keys(helper.getOrderQueueNamePrefix(namespace) + "*");
+            Set<String> keys = helper.getRedisTemplate().keys(getOrderQueueNamePrefix(namespace) + "*");
             assertNotNull(keys);
             assertEquals(mirror.orderPool.size(), keys.size());
         }
     }
 
     @Test
-    void delOrder() {
+    void remove() {
         List<Order> orders = OrderRandomizer.builder()
                 .numberOfPrice(10)
                 .numberOfSamePrice(10)
@@ -65,11 +75,11 @@ class OrderPoolLuaHelperTest extends Assertions {
         addOrdersToRedis(orders);
         // Mirror
         {
-            OrderPoolMirror mirror = new OrderPoolMirror(orders);
+            OrderPoolMirror mirror = new OrderPoolMirror(orders, helper.isAscending());
             for (Order order : orders) {
-                helper.delOrder(namespace, order.getId(), order.getPrice().toPlainString());
-                mirror.delOrder(order);
-                assertEquals(mirror.toString(), helper.fetchOrderPool(namespace).toString());
+                helper.remove(order);
+                mirror.remove(order);
+                assertEquals(mirror.toString(), helper.fetchOrderPool().toString());
             }
         }
 
@@ -79,7 +89,7 @@ class OrderPoolLuaHelperTest extends Assertions {
     }
 
     @Test
-    void match() {
+    void pop() {
         List<Order> orders = OrderRandomizer.builder()
                 .numberOfPrice(10)
                 .numberOfSamePrice(10)
@@ -95,17 +105,16 @@ class OrderPoolLuaHelperTest extends Assertions {
                 .build().get();
         // Mirror
         {
-            OrderPoolMirror mirror = new OrderPoolMirror(orders);
+            OrderPoolMirror mirror = new OrderPoolMirror(orders, helper.isAscending());
             String mirrorBeforeStr = mirror.toString();
-            assertEquals(mirrorBeforeStr, helper.fetchOrderPool(namespace).toString());
+            assertEquals(mirrorBeforeStr, helper.fetchOrderPool().toString());
 
             for (Order order : toBeMatchedOrders) {
                 boolean isAscending = ((int) (Math.random() * 10) & 1) == 0;
-                assertEquals(mirror.match(order, isAscending),
-                        helper.match(namespace, order.getPrice().toPlainString(),
-                                order.getAmount().toPlainString(), isAscending),
+                assertEquals(mirror.doPop(order.getPrice(), order.getAmount(), isAscending),
+                        helper.doPop(order.getPrice(), order.getAmount(), isAscending),
                         String.format("isAscending=%s \nmirrorBefore=%s\n", isAscending, mirrorBeforeStr));
-                assertEquals(mirror.orderPool, helper.fetchOrderPool(namespace),
+                assertEquals(mirror.orderPool, helper.fetchOrderPool(),
                         String.format("isAscending=%s \nmirrorBefore=%s\n", isAscending, mirrorBeforeStr));
             }
         }
@@ -122,11 +131,11 @@ class OrderPoolLuaHelperTest extends Assertions {
         addOrdersToRedis(orders);
         // Mirror
         {
-            OrderPoolMirror mirror = new OrderPoolMirror();
+            OrderPoolMirror mirror = new OrderPoolMirror(helper.isAscending());
             for (Order order : orders) {
-                mirror.addOrder(order);
+                mirror.add(order);
             }
-            ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> orderPool = helper.fetchOrderPool(namespace);
+            ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> orderPool = helper.fetchOrderPool();
             assertEquals(mirror.toString(), orderPool.toString());
         }
     }
@@ -137,9 +146,7 @@ class OrderPoolLuaHelperTest extends Assertions {
     }
 
     void addOrdersToRedis(List<Order> orders) {
-        for (Order order : orders) {
-            helper.addOrder(namespace, order.getId(), order.getPrice().toPlainString(), order.getAmount().toPlainString());
-        }
+        orders.forEach(helper::add);
     }
 
     @SneakyThrows
@@ -163,7 +170,7 @@ class OrderPoolLuaHelperTest extends Assertions {
         latch.await();
 
         Set<String> expectPrices = orders.stream().map(o -> o.getPrice().toPlainString()).collect(Collectors.toSet());
-        Set<String> keys = helper.getRedisTemplate().keys(helper.getOrderQueueNamePrefix(namespace) + "*");
+        Set<String> keys = helper.getRedisTemplate().keys(getOrderQueueNamePrefix(namespace) + "*");
         assertNotNull(keys);
         assertEquals(expectPrices.size(), keys.size());
     }

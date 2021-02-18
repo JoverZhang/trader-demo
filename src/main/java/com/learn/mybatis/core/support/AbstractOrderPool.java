@@ -2,11 +2,9 @@ package com.learn.mybatis.core.support;
 
 import com.learn.mybatis.core.lua.OrderPoolLuaHelper;
 import com.learn.mybatis.domain.Order;
-import lombok.AccessLevel;
-import lombok.Getter;
-import lombok.Setter;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
+import javax.annotation.Nonnull;
 import java.math.BigDecimal;
 import java.util.LinkedList;
 import java.util.List;
@@ -15,11 +13,13 @@ import java.util.concurrent.ConcurrentSkipListMap;
 /**
  * @author Jover Zhang
  */
-public abstract class AbstractOrderPool {
+public abstract class AbstractOrderPool implements OrderPool {
 
-    @Getter(value = AccessLevel.PROTECTED)
-    @Setter(value = AccessLevel.PROTECTED, onMethod_ = @Autowired)
-    private OrderPoolLuaHelper helper;
+    private final OrderPoolLuaHelper helper;
+
+    public AbstractOrderPool(StringRedisTemplate redisTemplate) {
+        helper = new OrderPoolLuaHelper(getNamespace(), isAscending(), redisTemplate);
+    }
 
     /**
      * 获取队列命名空间
@@ -34,37 +34,29 @@ public abstract class AbstractOrderPool {
      */
     abstract boolean isAscending();
 
-    public void addOrder(Order order) {
-        assert order.getId() != null;
-        assert order.getPrice() != null;
-        assert order.getAmount() != null;
-        helper.addOrder(getNamespace(), order.getId(),
-                order.getPrice().toPlainString(), order.getAmount().toPlainString());
+    @Override
+    public void add(@Nonnull Order order) {
+        helper.add(order);
     }
 
-    public void delOrder(Order order) {
-        assert order.getId() != null;
-        assert order.getPrice() != null;
-        helper.delOrder(getNamespace(), order.getId(), order.getPrice().toPlainString());
+    @Override
+    public void remove(@Nonnull Order order) {
+        helper.remove(order);
     }
 
-    public List<Order> match(Order externalOrder) {
-        assert externalOrder.getPrice() != null;
-        assert externalOrder.getAmount() != null;
-        return helper.match(getNamespace(),
-                externalOrder.getPrice().toPlainString(),
-                externalOrder.getAmount().toPlainString(),
-                isAscending());
+    @Override
+    public List<Order> pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount) {
+        return helper.pop(price, amount);
     }
 
     @Deprecated
     ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> fetchAllOrders() {
-        return helper.fetchOrderPool(getNamespace());
+        return helper.fetchOrderPool();
     }
 
     @Deprecated
     void print() {
-        helper.print(getNamespace());
+        helper.print();
     }
 
 }

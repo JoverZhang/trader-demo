@@ -1,9 +1,10 @@
 package com.learn.mybatis.core.lua;
 
+import com.learn.mybatis.core.support.OrderPool;
 import com.learn.mybatis.domain.Order;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.RequiredArgsConstructor;
 
+import javax.annotation.Nonnull;
 import java.math.BigDecimal;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -14,17 +15,20 @@ import java.util.concurrent.ConcurrentSkipListMap;
 /**
  * @author Jover Zhang
  */
-@NoArgsConstructor
-public class OrderPoolMirror {
+@RequiredArgsConstructor
+public class OrderPoolMirror implements OrderPool {
 
-    @Getter
     ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> orderPool = new ConcurrentSkipListMap<>();
 
-    public OrderPoolMirror(List<Order> orders) {
-        orders.forEach(this::addOrder);
+    final boolean isAscending;
+
+    public OrderPoolMirror(@Nonnull List<Order> orders, boolean isAscending) {
+        this.isAscending = isAscending;
+        orders.forEach(this::add);
     }
 
-    public synchronized void addOrder(Order order) {
+    @Override
+    public synchronized void add(@Nonnull Order order) {
         if (order.getAmount().compareTo(BigDecimal.ZERO) == 0) {
             return;
         }
@@ -37,7 +41,8 @@ public class OrderPoolMirror {
         });
     }
 
-    public synchronized void delOrder(Order order) {
+    @Override
+    public synchronized void remove(@Nonnull Order order) {
         orderPool.computeIfPresent(order.getPrice(), (k, v) -> {
             for (Order insideOrder : v) {
                 if (insideOrder.getId().equals(order.getId())) {
@@ -49,11 +54,14 @@ public class OrderPoolMirror {
         });
     }
 
-    public synchronized List<Order> match(Order outsideOrder, final boolean isAscending) {
-        LinkedList<Order> resultSet = new LinkedList<>();
-        final BigDecimal outsidePrice = outsideOrder.getPrice();
-        BigDecimal outsideAmount = outsideOrder.getAmount();
+    @Override
+    public List<Order> pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount) {
+        return doPop(price, amount, isAscending);
+    }
 
+    synchronized List<Order> doPop(final @Nonnull BigDecimal outsidePrice, @Nonnull BigDecimal outsideAmount,
+                                   boolean isAscending) {
+        LinkedList<Order> resultSet = new LinkedList<>();
         boolean isCompleted = false;
 
         Iterator<Entry<BigDecimal, LinkedList<Order>>> orderPoolIterator =

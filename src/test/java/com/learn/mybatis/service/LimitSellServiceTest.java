@@ -53,7 +53,8 @@ class LimitSellServiceTest extends Assertions {
         }};
 
         for (TestSet testSet : testSets) {
-            Mockito.when(limitBuyOrderPool.match(testSet.getParam())).thenReturn(testSet.getResult());
+            Mockito.when(limitBuyOrderPool.pop(testSet.getParam().getPrice(), testSet.getParam().getAmount()))
+                    .thenReturn(testSet.getResult());
 
             // 该入参会在方法内部被改变
             Order entryParam = testSet.getParam();

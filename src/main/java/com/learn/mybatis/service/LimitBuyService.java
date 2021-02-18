@@ -30,7 +30,7 @@ public class LimitBuyService {
         List<Order> matchedOrders = new LinkedList<>();
 
         // 撮合 限价卖单
-        matchedOrders.addAll(limitSellOrderPool.match(order));
+        matchedOrders.addAll(limitSellOrderPool.pop(order.getPrice(), order.getAmount()));
         // 匹配有效则更新 外单 余额
         if (!matchedOrders.isEmpty()) {
             BigDecimal sumAmount = matchedOrders.stream().map(Order::getAmount).reduce(BigDecimal::add).get();
@@ -42,7 +42,7 @@ public class LimitBuyService {
         }
 
         // 将 买单 放入 限价买单池
-        limitBuyOrderPool.addOrder(order);
+        limitBuyOrderPool.add(order);
 
         return matchedOrders;
     }

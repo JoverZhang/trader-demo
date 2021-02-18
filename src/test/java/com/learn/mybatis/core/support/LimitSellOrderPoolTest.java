@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.*;
 
@@ -18,8 +19,11 @@ class LimitSellOrderPoolTest extends Assertions {
     @Autowired
     LimitSellOrderPool orderPool;
 
+    @Autowired
+    StringRedisTemplate redisTemplate;
+
     @Test
-    void match() {
+    void pop() {
         List<Order> orders = new ArrayList<Order>() {{
             for (int i = 1; i <= 10; i++) {
                 add(new Order("s" + i, String.valueOf(i), "10"));
@@ -62,12 +66,12 @@ class LimitSellOrderPoolTest extends Assertions {
         }};
         // Mirror
         {
-            orders.forEach(orderPool::addOrder);
-            OrderPoolMirror mirror = new OrderPoolMirror(orders);
+            orders.forEach(orderPool::add);
+            OrderPoolMirror mirror = new OrderPoolMirror(orders, orderPool.isAscending());
 
             toBeMatchedOrderMap.forEach((order, set) -> {
-                List<Order> mirrorMatched = mirror.match(order, orderPool.isAscending());
-                List<Order> orderPoolMatched = orderPool.match(order);
+                List<Order> mirrorMatched = mirror.pop(order.getPrice(), order.getAmount());
+                List<Order> orderPoolMatched = orderPool.pop(order.getPrice(), order.getAmount());
 
                 assertEquals(mirrorMatched, orderPoolMatched);
                 assertEquals(set, orderPoolMatched);
@@ -77,8 +81,7 @@ class LimitSellOrderPoolTest extends Assertions {
 
     @AfterEach
     void after() {
-        orderPool.getHelper().getRedisTemplate()
-                .execute((RedisCallback<Object>) connection -> connection.execute("FLUSHALL"));
+        redisTemplate.execute((RedisCallback<Object>) connection -> connection.execute("FLUSHALL"));
     }
 
 }

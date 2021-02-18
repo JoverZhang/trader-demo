@@ -1,5 +1,6 @@
 package com.learn.mybatis.core.lua;
 
+import com.learn.mybatis.core.support.OrderPool;
 import com.learn.mybatis.domain.Order;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -8,10 +9,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scripting.support.ResourceScriptSource;
-import org.springframework.stereotype.Component;
 
 import javax.annotation.Nonnull;
-import javax.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -22,55 +21,93 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Getter
-@Component
+@SuppressWarnings("rawtypes")
 @RequiredArgsConstructor
-public class OrderPoolLuaHelper {
+public class OrderPoolLuaHelper implements OrderPool {
 
-    final private StringRedisTemplate redisTemplate;
+    private static final DefaultRedisScript<Long> ADD_SCRIPT;
 
-    private DefaultRedisScript<Long> addScript;
+    private static final DefaultRedisScript<Long> DEL_SCRIPT;
 
-    private DefaultRedisScript<Long> delScript;
+    private static final DefaultRedisScript<List> MATCH_SCRIPT;
 
-    @SuppressWarnings("rawtypes")
-    private DefaultRedisScript<List> matchScript;
-
-    @PostConstruct
-    @SuppressWarnings("rawtypes")
-    public void init() {
-        addScript = new DefaultRedisScript<Long>() {{
+    static {
+        ADD_SCRIPT = new DefaultRedisScript<Long>() {{
             setResultType(Long.class);
             setScriptSource(new ResourceScriptSource(new ClassPathResource("/lua/add_order.lua")));
         }};
-        delScript = new DefaultRedisScript<Long>() {{
+        DEL_SCRIPT = new DefaultRedisScript<Long>() {{
             setScriptSource(new ResourceScriptSource(new ClassPathResource("/lua/del_order.lua")));
             setResultType(Long.class);
         }};
-        matchScript = new DefaultRedisScript<List>() {{
+        MATCH_SCRIPT = new DefaultRedisScript<List>() {{
             setResultType(List.class);
             setScriptSource(new ResourceScriptSource(new ClassPathResource("/lua/match_orders.lua")));
         }};
     }
 
-    public void addOrder(@Nonnull String namespace, @Nonnull String id,
-                         @Nonnull String price, @Nonnull String amount) {
-        redisTemplate.execute(addScript,
-                Arrays.asList("namespace", "id", "price", "amount"),
-                namespace, id, price, amount);
+    final private String namespace;
+
+    final private boolean isAscending;
+
+    final private StringRedisTemplate redisTemplate;
+
+    /**
+     * Just for debug
+     */
+    @Deprecated
+    static String getPriceQueueName(String namespace) {
+        return namespace + "::prices";
     }
 
-    public void delOrder(@Nonnull String namespace, @Nonnull String id, @Nonnull String price) {
-        redisTemplate.execute(delScript,
+    /**
+     * Just for debug
+     */
+    @Deprecated
+    static String getOrderQueueNamePrefix(String namespace) {
+        return namespace + "::orders::";
+    }
+
+    /**
+     * Just for debug
+     */
+    @Deprecated
+    static String getOrderQueueName(String namespace, String price) {
+        return getOrderQueueNamePrefix(namespace) + price;
+    }
+
+    /**
+     * Just for debug
+     */
+    @Deprecated
+    static String getOrderMapName(String namespace) {
+        return namespace + "::map";
+    }
+
+    @Override
+    public void add(@Nonnull Order order) {
+        redisTemplate.execute(ADD_SCRIPT,
+                Arrays.asList("namespace", "id", "price", "amount"),
+                getNamespace(), order.getId(), order.getPrice().toPlainString(), order.getAmount().toPlainString());
+    }
+
+    @Override
+    public void remove(@Nonnull Order order) {
+        redisTemplate.execute(DEL_SCRIPT,
                 Arrays.asList("namespace", "id", "price"),
-                namespace, id, price);
+                getNamespace(), order.getId(), order.getPrice().toPlainString());
+    }
+
+    @Override
+    public List<Order> pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount) {
+        return doPop(price, amount, isAscending());
     }
 
     @SuppressWarnings("unchecked")
-    public List<Order> match(@Nonnull String namespace, @Nonnull String price,
-                             @Nonnull String amount, boolean isAscending) {
+    List<Order> doPop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount, boolean isAscending) {
         List<String> matchedOrders = (List<String>) getRedisTemplate()
-                .execute(matchScript, Arrays.asList("namespace", "price", "amount", "isAscending"),
-                        namespace, price, amount, String.valueOf(isAscending));
+                .execute(MATCH_SCRIPT, Arrays.asList("namespace", "price", "amount", "isAscending"),
+                        getNamespace(), price.toPlainString(), amount.toPlainString(), String.valueOf(isAscending));
         if (matchedOrders == null || matchedOrders.isEmpty()) {
             return Collections.emptyList();
         }
@@ -82,15 +119,13 @@ public class OrderPoolLuaHelper {
      */
     @Deprecated
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> fetchOrderPool(@Nonnull String namespace) {
+    public ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> fetchOrderPool() {
         ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> result = new ConcurrentSkipListMap<>();
-
-        DefaultRedisScript<List> printScript = new DefaultRedisScript<List>() {{
-            setScriptSource(new ResourceScriptSource(new ClassPathResource("/lua/fetch_all_orders.lua")));
-            setResultType(List.class);
-        }};
         List<List<String>> orderPool = redisTemplate
-                .execute(printScript, Collections.singletonList("namespace"), namespace);
+                .execute(new DefaultRedisScript<List>() {{
+                    setScriptSource(new ResourceScriptSource(new ClassPathResource("/lua/fetch_all_orders.lua")));
+                    setResultType(List.class);
+                }}, Collections.singletonList("namespace"), getNamespace());
         if (orderPool == null || orderPool.isEmpty()) {
             return result;
         }
@@ -114,8 +149,8 @@ public class OrderPoolLuaHelper {
      * Just for debug
      */
     @Deprecated
-    public void print(@Nonnull String namespace) {
-        ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> orderPool = fetchOrderPool(namespace);
+    public void print() {
+        ConcurrentSkipListMap<BigDecimal, LinkedList<Order>> orderPool = fetchOrderPool();
         if (orderPool == null || orderPool.isEmpty()) {
             System.out.println(orderPool);
             return;
@@ -130,38 +165,6 @@ public class OrderPoolLuaHelper {
         }
 
         System.out.println(strBuilder);
-    }
-
-    /**
-     * Just for debug
-     */
-    @Deprecated
-    String getPriceQueueName(String namespace) {
-        return namespace + "::prices";
-    }
-
-    /**
-     * Just for debug
-     */
-    @Deprecated
-    String getOrderQueueNamePrefix(String namespace) {
-        return namespace + "::orders::";
-    }
-
-    /**
-     * Just for debug
-     */
-    @Deprecated
-    String getOrderQueueName(String namespace, String price) {
-        return getOrderQueueNamePrefix(namespace) + price;
-    }
-
-    /**
-     * Just for debug
-     */
-    @Deprecated
-    String getOrderMapName(String namespace) {
-        return namespace + "::map";
     }
 
 }
