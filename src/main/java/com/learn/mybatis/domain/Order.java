@@ -43,6 +43,9 @@ public class Order {
 
     @Override
     public boolean equals(Object obj) {
+        if (super.equals(obj)) {
+            return true;
+        }
         if (obj instanceof Order) {
             Order o = (Order) obj;
             if (!this.toString().equals(o.toString())) {
