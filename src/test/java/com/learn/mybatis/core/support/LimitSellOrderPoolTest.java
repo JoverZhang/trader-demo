@@ -70,8 +70,8 @@ class LimitSellOrderPoolTest extends Assertions {
             OrderPoolMirror mirror = new OrderPoolMirror(orders, orderPool.isAscending());
 
             toBeMatchedOrderMap.forEach((order, set) -> {
-                List<Order> mirrorMatched = mirror.pop(order.getPrice(), order.getAmount());
-                List<Order> orderPoolMatched = orderPool.pop(order.getPrice(), order.getAmount());
+                List<Order> mirrorMatched = mirror.pop(order.getPrice(), order.getAmount()).getOrders();
+                List<Order> orderPoolMatched = orderPool.pop(order.getPrice(), order.getAmount()).getOrders();
 
                 assertEquals(mirrorMatched, orderPoolMatched);
                 assertEquals(set, orderPoolMatched);

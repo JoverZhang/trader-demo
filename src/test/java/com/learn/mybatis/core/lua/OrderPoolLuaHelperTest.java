@@ -15,6 +15,7 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
@@ -89,7 +90,37 @@ class OrderPoolLuaHelperTest extends Assertions {
     }
 
     @Test
-    void pop() {
+    void popByAmount() {
+        Randomizer amountRandomizer;
+        List<Order> orders = OrderRandomizer.builder()
+                .numberOfPrice(2)
+                .numberOfSamePrice(2)
+                .priceRandomizer(new Randomizer("0.0001", "100000", 4))
+                .amountRandomizer((amountRandomizer = new Randomizer("0.0001", "100000", 4)))
+                .build().get();
+        addOrdersToRedis(orders);
+        List<BigDecimal> amounts = Arrays.stream(new BigDecimal[orders.size()])
+                .map(ignore -> amountRandomizer.getBigDecimal())
+                .collect(Collectors.toList());
+        {
+            OrderPoolMirror mirror = new OrderPoolMirror(orders, helper.isAscending());
+            String mirrorBeforeStr = mirror.toString();
+            assertEquals(mirrorBeforeStr, helper.fetchOrderPool().toString());
+
+            for (BigDecimal amount : amounts) {
+                System.out.println("amount = " + amount);
+                helper.print();
+                List<Order> mirrorResult = mirror.popByAmount(amount).getOrders();
+                List<Order> helperResult = helper.popByAmount(amount).getOrders();
+                assertEquals(mirrorResult, helperResult, String.format("mirrorBefore=%s\n", mirrorBeforeStr));
+                assertEquals(mirror.orderPool, helper.fetchOrderPool(),
+                        String.format("mirrorBefore=%s\n", mirrorBeforeStr));
+            }
+        }
+    }
+
+    @Test
+    void doPop() {
         List<Order> orders = OrderRandomizer.builder()
                 .numberOfPrice(10)
                 .numberOfSamePrice(10)
@@ -111,8 +142,9 @@ class OrderPoolLuaHelperTest extends Assertions {
 
             for (Order order : toBeMatchedOrders) {
                 boolean isAscending = ((int) (Math.random() * 10) & 1) == 0;
-                assertEquals(mirror.doPop(order.getPrice(), order.getAmount(), isAscending),
-                        helper.doPop(order.getPrice(), order.getAmount(), isAscending),
+                List<Order> mirrorResult = mirror.doPop(order.getPrice(), order.getAmount(), isAscending).getOrders();
+                List<Order> helperResult = helper.doPop(order.getPrice(), order.getAmount(), isAscending).getOrders();
+                assertEquals(mirrorResult, helperResult,
                         String.format("isAscending=%s \nmirrorBefore=%s\n", isAscending, mirrorBeforeStr));
                 assertEquals(mirror.orderPool, helper.fetchOrderPool(),
                         String.format("isAscending=%s \nmirrorBefore=%s\n", isAscending, mirrorBeforeStr));

@@ -4,6 +4,7 @@ import com.learn.mybatis.MainTest;
 import com.learn.mybatis.core.support.LimitBuyOrderPool;
 import com.learn.mybatis.core.support.LimitSellOrderPool;
 import com.learn.mybatis.domain.Order;
+import com.learn.mybatis.domain.OrderPoolPopResult;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.junit.jupiter.api.Assertions;
@@ -13,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -34,22 +36,25 @@ class LimitBuyServiceTest extends Assertions {
         List<TestSet> testSets = new LinkedList<TestSet>() {{
             add(new TestSet(
                     new Order("b1", "100", "0"),
-                    Collections.emptyList(),
-                    new Order("b1", "100", "0")));
+                    OrderPoolPopResult.build(
+                            new BigDecimal("100"), BigDecimal.ZERO,
+                            Collections.emptyList())));
             add(new TestSet(
                     new Order("b1", "100", "100"),
-                    new LinkedList<Order>() {{
-                        add(new Order("s1", "100", "20"));
-                        add(new Order("s2", "100", "20"));
-                    }},
-                    new Order("b1", "100", "60")));
+                    OrderPoolPopResult.build(
+                            new BigDecimal("100"), new BigDecimal("60"),
+                            new LinkedList<Order>() {{
+                                add(new Order("s1", "100", "20"));
+                                add(new Order("s2", "100", "20"));
+                            }})));
             add(new TestSet(
                     new Order("b1", "100", "100"),
-                    new LinkedList<Order>() {{
-                        add(new Order("s1", "100", "50"));
-                        add(new Order("s2", "100", "50"));
-                    }},
-                    new Order("b1", "100", "0")));
+                    OrderPoolPopResult.build(
+                            new BigDecimal("100"), BigDecimal.ZERO,
+                            new LinkedList<Order>() {{
+                                add(new Order("s1", "100", "50"));
+                                add(new Order("s2", "100", "50"));
+                            }})));
         }};
 
         for (TestSet testSet : testSets) {
@@ -60,8 +65,9 @@ class LimitBuyServiceTest extends Assertions {
             Order entryParam = testSet.getParam();
             List<Order> matchedOrders = limitBuyService.entry(entryParam);
 
-            assertEquals(testSet.getResult(), matchedOrders);
-            assertEquals(testSet.getAfterParam(), entryParam);
+            assertEquals(testSet.getResult().getOrders(), matchedOrders);
+            assertEquals(testSet.getResult().getRemainingPrice(), entryParam.getPrice());
+            assertEquals(testSet.getResult().getRemainingAmount(), entryParam.getAmount());
         }
     }
 
@@ -71,9 +77,7 @@ class LimitBuyServiceTest extends Assertions {
 
         Order param;
 
-        List<Order> result;
-
-        Order afterParam;
+        OrderPoolPopResult result;
 
     }
 

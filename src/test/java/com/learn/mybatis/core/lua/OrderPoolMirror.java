@@ -2,11 +2,13 @@ package com.learn.mybatis.core.lua;
 
 import com.learn.mybatis.core.support.OrderPool;
 import com.learn.mybatis.domain.Order;
+import com.learn.mybatis.domain.OrderPoolPopResult;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.Assert;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.math.BigDecimal;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map.Entry;
@@ -55,83 +57,157 @@ public class OrderPoolMirror implements OrderPool {
     }
 
     @Override
-    public List<Order> pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount) {
+    public OrderPoolPopResult pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount) {
         return doPop(price, amount, isAscending);
     }
 
-    synchronized List<Order> doPop(final @Nonnull BigDecimal outsidePrice, @Nonnull BigDecimal outsideAmount,
-                                   boolean isAscending) {
-        LinkedList<Order> resultSet = new LinkedList<>();
-        boolean isCompleted = false;
+    // TODO
+    public OrderPoolPopResult popByPrice(@Nonnull BigDecimal sumPrice, int precision) {
+//        final BigDecimal MAX = new BigDecimal("999999999");
+        List<Order> matchedOrders = new LinkedList<>();
+//        BigDecimal previousPrice = null;
+//        BigDecimal remainingAmount;
+//
+//        Order firstOrder;
+//        while ((firstOrder = peekFirst(true)) != null) {
+//            remainingAmount = sumPrice.divide(firstOrder.getPrice(), precision, RoundingMode.DOWN);
+//            // 当 剩余数量 < 挂单的数量 时
+//            // 挂单的数量 -= 剩余数量, 剩余数量 = 0
+//            if (remainingAmount.compareTo(firstOrder.getAmount()) < 0) {
+//                matchedOrders.add(Order.builder()
+//                        .id(firstOrder.getId())
+//                        .price(firstOrder.getPrice())
+//                        .amount(remainingAmount)
+//                        .build());
+//                // TODO: 逻辑上不会为 false
+//                Assert.isTrue(
+//                        compareAndUpdateFirst(firstOrder, Order.builder()
+//                                .id(firstOrder.getId())
+//                                .price(firstOrder.getPrice())
+//                                .amount(firstOrder.getAmount().subtract(remainingAmount))
+//                                .build(), isAscending)
+//                );
+//                remainingAmount = BigDecimal.ZERO;
+//            }
+//            // 当 剩余数量 >= 挂单的数量 时
+//            // 删除第一个挂单, 剩余数量 -= 挂单的数量
+//            else {
+//                matchedOrders.add(firstOrder);
+//                // TODO: 逻辑上不会为 false
+//                Assert.isTrue(delFirstByExpect(firstOrder, isAscending));
+//                remainingAmount = remainingAmount.subtract(firstOrder.getAmount());
+//            }
+//
+//            if (remainingAmount.compareTo(BigDecimal.ZERO) == 0) {
+//                break;
+//            }
+//        }
 
-        Iterator<Entry<BigDecimal, LinkedList<Order>>> orderPoolIterator =
-                new Iterator<Entry<BigDecimal, LinkedList<Order>>>() {
-                    Entry<BigDecimal, LinkedList<Order>> lastReturn;
+        return OrderPoolPopResult.build(sumPrice, null, matchedOrders);
+    }
 
-                    @Override
-                    public boolean hasNext() {
-                        lastReturn = isAscending ? orderPool.firstEntry() : orderPool.lastEntry();
-                        if (lastReturn == null) {
-                            return false;
-                        }
-                        BigDecimal nextPrice = lastReturn.getValue().getFirst().getPrice();
-                        if (isAscending) {
-                            return outsidePrice.compareTo(nextPrice) >= 0;
-                        }
-                        return outsidePrice.compareTo(nextPrice) <= 0;
-                    }
+    public OrderPoolPopResult popByAmount(@Nonnull BigDecimal amount) {
+        return doPop(new BigDecimal("0"), amount, false);
+    }
 
-                    @Override
-                    public Entry<BigDecimal, LinkedList<Order>> next() {
-                        return lastReturn;
-                    }
+    synchronized OrderPoolPopResult doPop(final @Nonnull BigDecimal price, final @Nonnull BigDecimal amount,
+                                          boolean isAscending) {
+        LinkedList<Order> matchedOrders = new LinkedList<>();
+        BigDecimal remainingAmount = amount;
 
-                    @Override
-                    public void remove() {
-                        orderPool.remove(lastReturn.getKey(), lastReturn.getValue());
-                    }
-                };
-
-        while (!isCompleted && orderPoolIterator.hasNext()) {
-            Entry<BigDecimal, LinkedList<Order>> entry = orderPoolIterator.next();
-            LinkedList<Order> insideOrders = entry.getValue();
-
-            Iterator<Order> insideOrderIterator = insideOrders.iterator();
-            while (insideOrderIterator.hasNext()) {
-                Order insideOrder = insideOrderIterator.next();
-                BigDecimal insideAmount = insideOrder.getAmount();
-                if (outsideAmount.compareTo(insideAmount) < 0) {
-                    resultSet.add(Order.builder()
-                            .id(insideOrder.getId())
-                            .price(insideOrder.getPrice())
-                            .amount(outsideAmount)
-                            .build());
-                    insideOrder.setAmount(insideAmount.subtract(outsideAmount));
-                    outsideAmount = BigDecimal.ZERO;
-                }
-                // 需要删除 inside order
-                else {
-                    resultSet.add(Order.builder()
-                            .id(insideOrder.getId())
-                            .price(insideOrder.getPrice())
-                            .amount(insideAmount)
-                            .build());
-                    insideOrderIterator.remove();
-                    outsideAmount = outsideAmount.subtract(insideAmount);
-                }
-
-                if (outsideAmount.compareTo(BigDecimal.ZERO) == 0) {
-                    isCompleted = true;
-                    break;
-                }
+        for (Order firstOrder = peekFirst(isAscending);
+             firstOrder != null &&
+                     validatePriceForPop(price, firstOrder.getPrice(), isAscending) &&
+                     remainingAmount.compareTo(BigDecimal.ZERO) > 0;
+             firstOrder = peekFirst(isAscending)) {
+            // 当 剩余数量 < 挂单的数量 时
+            // 挂单的数量 -= 剩余数量, 剩余数量 = 0
+            if (remainingAmount.compareTo(firstOrder.getAmount()) < 0) {
+                matchedOrders.add(Order.builder()
+                        .id(firstOrder.getId())
+                        .price(firstOrder.getPrice())
+                        .amount(remainingAmount)
+                        .build());
+                // TODO: 逻辑上不会为 false
+                Assert.isTrue(
+                        compareAndUpdateFirst(firstOrder, Order.builder()
+                                .id(firstOrder.getId())
+                                .price(firstOrder.getPrice())
+                                .amount(firstOrder.getAmount().subtract(remainingAmount))
+                                .build(), isAscending)
+                );
+                remainingAmount = BigDecimal.ZERO;
             }
-
-            if (insideOrders.isEmpty()) {
-                orderPoolIterator.remove();
+            // 当 剩余数量 >= 挂单的数量 时
+            // 删除第一个挂单, 剩余数量 -= 挂单的数量
+            else {
+                matchedOrders.add(firstOrder);
+                // TODO: 逻辑上不会为 false
+                Assert.isTrue(delFirstByExpect(firstOrder, isAscending));
+                remainingAmount = remainingAmount.subtract(firstOrder.getAmount());
             }
         }
 
-        return resultSet;
+        return OrderPoolPopResult.build(price, remainingAmount, matchedOrders);
+    }
+
+    /**
+     * 判断 `sourcePrice` 是否满足 pop `targetPrice` 的条件
+     * <p>正常情况下, 当 `isAscending` 为 true 时, 当前 orderPool 为 `卖单池`, 所以 `sourcePrice` 需要大于等于 `targetPrice`,
+     * 反之亦然
+     */
+    private boolean validatePriceForPop(@Nonnull BigDecimal sourcePrice, @Nonnull BigDecimal targetPrice, boolean isAscending) {
+        return isAscending ?
+                sourcePrice.compareTo(targetPrice) >= 0 :
+                sourcePrice.compareTo(targetPrice) <= 0;
+    }
+
+    @Nullable
+    private synchronized Order peekFirst(boolean isAscending) {
+        Entry<BigDecimal, LinkedList<Order>> firstEntry = peekFirstEntry(isAscending);
+        if (firstEntry == null) {
+            return null;
+        }
+        return firstEntry.getValue().getFirst();
+    }
+
+    @Nullable
+    private synchronized Entry<BigDecimal, LinkedList<Order>> peekFirstEntry(boolean isAscending) {
+        Entry<BigDecimal, LinkedList<Order>> entry = isAscending ? orderPool.firstEntry() : orderPool.lastEntry();
+        if (entry == null) {
+            return null;
+        }
+        Assert.notEmpty(entry.getValue());
+        return entry;
+    }
+
+    private synchronized boolean delFirstByExpect(@Nonnull Order expect, boolean isAscending) {
+        Order actual = peekFirst(isAscending);
+        if (!expect.equals(actual)) {
+            return false;
+        }
+        Entry<BigDecimal, LinkedList<Order>> firstEntry = peekFirstEntry(isAscending);
+        if (firstEntry == null) {
+            return false;
+        }
+        if (firstEntry.getValue().size() == 1) {
+            Assert.isTrue(orderPool.remove(firstEntry.getKey(), firstEntry.getValue()));
+        } else {
+            Assert.isTrue(firstEntry.getValue().remove(actual));
+        }
+        return true;
+    }
+
+    private synchronized boolean compareAndUpdateFirst(@Nonnull Order expect, @Nonnull Order target,
+                                                       boolean isAscending) {
+        Assert.isTrue(expect.getId().equals(target.getId()));
+        Order actual = peekFirst(isAscending);
+        if (!expect.equals(actual)) {
+            return false;
+        }
+        actual.setPrice(target.getPrice());
+        actual.setAmount(target.getAmount());
+        return true;
     }
 
     @Override

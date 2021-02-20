@@ -2,6 +2,7 @@ package com.learn.mybatis.service;
 
 import com.learn.mybatis.core.support.LimitBuyOrderPool;
 import com.learn.mybatis.core.support.LimitSellOrderPool;
+import com.learn.mybatis.core.support.MarketBuyOrderPool;
 import com.learn.mybatis.domain.Order;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,11 +27,13 @@ public class LimitSellService {
 
     final LimitBuyOrderPool limitBuyOrderPool;
 
+    final MarketBuyOrderPool marketBuyOrderPool;
+
     public List<Order> entry(Order order) {
         List<Order> matchedOrders = new LinkedList<>();
 
         // 撮合 限价买单
-        matchedOrders.addAll(limitBuyOrderPool.pop(order.getPrice(), order.getAmount()));
+        matchedOrders.addAll(limitBuyOrderPool.pop(order.getPrice(), order.getAmount()).getOrders());
         // 匹配有效则更新 外单 余额
         if (!matchedOrders.isEmpty()) {
             BigDecimal sumAmount = matchedOrders.stream().map(Order::getAmount).reduce(BigDecimal::add).get();

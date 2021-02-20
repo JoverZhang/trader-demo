@@ -2,6 +2,7 @@ package com.learn.mybatis.core.lua;
 
 import com.learn.mybatis.core.support.OrderPool;
 import com.learn.mybatis.domain.Order;
+import com.learn.mybatis.domain.OrderPoolPopResult;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -99,19 +100,27 @@ public class OrderPoolLuaHelper implements OrderPool {
     }
 
     @Override
-    public List<Order> pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount) {
+    public OrderPoolPopResult pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount) {
         return doPop(price, amount, isAscending());
     }
 
+    /**
+     * 仅用于 `限价买单池`
+     */
+    public OrderPoolPopResult popByAmount(@Nonnull BigDecimal amount) {
+        return doPop(BigDecimal.ZERO, amount, false);
+    }
+
     @SuppressWarnings("unchecked")
-    List<Order> doPop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount, boolean isAscending) {
+    OrderPoolPopResult doPop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount, boolean isAscending) {
         List<String> matchedOrders = (List<String>) getRedisTemplate()
                 .execute(MATCH_SCRIPT, Arrays.asList("namespace", "price", "amount", "isAscending"),
                         getNamespace(), price.toPlainString(), amount.toPlainString(), String.valueOf(isAscending));
         if (matchedOrders == null || matchedOrders.isEmpty()) {
-            return Collections.emptyList();
+            return OrderPoolPopResult.build(price, amount, Collections.emptyList());
         }
-        return matchedOrders.stream().map(Order::decode).collect(Collectors.toList());
+        return OrderPoolPopResult.build(price, amount,
+                matchedOrders.stream().map(Order::decode).collect(Collectors.toList()));
     }
 
     /**

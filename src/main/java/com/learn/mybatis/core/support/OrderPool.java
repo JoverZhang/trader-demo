@@ -1,10 +1,10 @@
 package com.learn.mybatis.core.support;
 
 import com.learn.mybatis.domain.Order;
+import com.learn.mybatis.domain.OrderPoolPopResult;
 
 import javax.annotation.Nonnull;
 import java.math.BigDecimal;
-import java.util.List;
 
 /**
  * @author Jover Zhang
@@ -32,6 +32,6 @@ public interface OrderPool {
      * @param amount 交易数量
      * @return 符合弹出条件的 `挂单` 列表
      */
-    List<Order> pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount);
+    OrderPoolPopResult pop(@Nonnull BigDecimal price, @Nonnull BigDecimal amount);
 
 }
