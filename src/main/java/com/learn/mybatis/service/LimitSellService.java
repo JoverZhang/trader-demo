@@ -43,6 +43,9 @@ public class LimitSellService {
                 return matchedOrders;
             }
         }
+//order.getAmount()
+        // 撮合 市价买单
+//        marketBuyOrderPool.pop()
 
         // 将 卖单 放入 限价卖单池
         limitSellOrderPool.add(order);

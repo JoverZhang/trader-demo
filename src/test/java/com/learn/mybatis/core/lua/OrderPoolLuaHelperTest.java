@@ -102,6 +102,7 @@ class OrderPoolLuaHelperTest extends Assertions {
         List<BigDecimal> amounts = Arrays.stream(new BigDecimal[orders.size()])
                 .map(ignore -> amountRandomizer.getBigDecimal())
                 .collect(Collectors.toList());
+        // Mirror
         {
             OrderPoolMirror mirror = new OrderPoolMirror(orders, helper.isAscending());
             String mirrorBeforeStr = mirror.toString();
