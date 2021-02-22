@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentSkipListMap;
 
@@ -24,6 +25,17 @@ public class OrderPoolMirrorTest extends Assertions {
     void popByPrice() {
         final int PRECISION = 6;
         List<TestSet> testSets = new ArrayList<TestSet>() {{
+            add(new TestSet(
+                    new ArrayList<Order>() {{
+                        add(new Order("s1", "2", "10"));
+                    }},
+                    new BigDecimal("0"),
+                    OrderPoolPopResult.build(BigDecimal.ZERO, null, Collections.emptyList()),
+                    new ConcurrentSkipListMap<BigDecimal, List<Order>>() {{
+                        put(new BigDecimal("2"), new ArrayList<Order>() {{
+                            add(new Order("s1", "2", "10"));
+                        }});
+                    }}));
             add(new TestSet(
                     new ArrayList<Order>() {{
                         add(new Order("s1", "2", "10"));
@@ -62,6 +74,28 @@ public class OrderPoolMirrorTest extends Assertions {
                             add(new Order("s6", "3", "2.666667"));
                         }});
                     }}));
+            add(new TestSet(
+                    new ArrayList<Order>() {{
+                        add(new Order("s1", "2", "10"));
+                        add(new Order("s2", "3", "20"));
+                    }},
+                    new BigDecimal("80"),
+                    OrderPoolPopResult.build(BigDecimal.ZERO, null, new ArrayList<Order>() {{
+                        add(new Order("s1", "2", "10"));
+                        add(new Order("s2", "3", "20"));
+                    }}),
+                    new ConcurrentSkipListMap<>()));
+            add(new TestSet(
+                    new ArrayList<Order>() {{
+                        add(new Order("s1", "2", "10"));
+                        add(new Order("s2", "3", "20"));
+                    }},
+                    new BigDecimal("81"),
+                    OrderPoolPopResult.build(new BigDecimal("0.999999"), null, new ArrayList<Order>() {{
+                        add(new Order("s1", "2", "10"));
+                        add(new Order("s2", "3", "20"));
+                    }}),
+                    new ConcurrentSkipListMap<>()));
         }};
 
         for (TestSet testSet : testSets) {
