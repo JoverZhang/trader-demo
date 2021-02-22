@@ -115,11 +115,10 @@ public class OrderPoolMirror implements OrderPool {
         LinkedList<Order> matchedOrders = new LinkedList<>();
         BigDecimal remainingAmount = amount;
 
-        for (Order firstOrder = peekFirst(isAscending);
-             firstOrder != null &&
-                     validatePriceForPop(price, firstOrder.getPrice(), isAscending) &&
-                     remainingAmount.compareTo(BigDecimal.ZERO) > 0;
-             firstOrder = peekFirst(isAscending)) {
+        Order firstOrder;
+        while ((firstOrder = peekFirst(isAscending)) != null &&
+                validatePriceForPop(price, firstOrder.getPrice(), isAscending) &&
+                remainingAmount.compareTo(BigDecimal.ZERO) > 0) {
             // 当 剩余数量 < 挂单的数量 时
             // 挂单的数量 -= 剩余数量, 剩余数量 = 0
             if (remainingAmount.compareTo(firstOrder.getAmount()) < 0) {
