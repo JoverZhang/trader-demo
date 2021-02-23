@@ -2,11 +2,12 @@ version: '3.8'
 
 services:
   redis:
-    image: ttmo/redis-decimal:interim-0.0.2
+    image: ttmo/redis-decimal:0.0.2
     container_name: redis
     ports:
       - 6379:6379
-    entrypoint: /usr/local/bin/redis-server --loadmodule /usr/lib/redis/modules/libdecimal.so
+    volumes:
+      - ./src/main/resources/lua:/lua
 
   zookeeper:
     image: zookeeper
